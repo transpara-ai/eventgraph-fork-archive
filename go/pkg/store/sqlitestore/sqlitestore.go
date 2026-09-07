@@ -224,18 +224,18 @@ func (s *SQLiteStore) getUnlocked(id types.EventID) (event.Event, error) {
 
 func (s *SQLiteStore) scanEvent(row *sql.Row) (event.Event, error) {
 	var (
-		position      int
-		eventID       string
-		eventType     string
-		version       int
-		timestampNs   int64
-		source        string
-		contentJSON   string
-		causesJSON    string
+		position       int
+		eventID        string
+		eventType      string
+		version        int
+		timestampNs    int64
+		source         string
+		contentJSON    string
+		causesJSON     string
 		conversationID string
-		hash          string
-		prevHash      string
-		sig           []byte
+		hash           string
+		prevHash       string
+		sig            []byte
 	)
 	err := row.Scan(&position, &eventID, &eventType, &version, &timestampNs,
 		&source, &contentJSON, &causesJSON, &conversationID, &hash, &prevHash, &sig)
@@ -301,7 +301,11 @@ func (s *SQLiteStore) Head() (types.Option[event.Event], error) {
 	row := s.db.QueryRow("SELECT * FROM events ORDER BY position DESC LIMIT 1")
 	ev, err := s.scanEvent(row)
 	if err != nil {
-		return types.None[event.Event](), nil
+		var notFound *store.EventNotFoundError
+		if errors.As(err, &notFound) {
+			return types.None[event.Event](), nil
+		}
+		return types.None[event.Event](), err
 	}
 	return types.Some(ev), nil
 }
@@ -870,6 +874,6 @@ func unmarshalContent(eventType string, data []byte) (event.EventContent, error)
 		var c event.EGIPTrustUpdatedContent
 		return c, json.Unmarshal(data, &c)
 	default:
-		return nil, fmt.Errorf("unknown event type: %s", eventType)
+		return event.UnmarshalContent(eventType, data)
 	}
 }
