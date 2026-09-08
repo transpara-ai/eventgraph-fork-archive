@@ -393,3 +393,28 @@ func TestResolverFromCatalogFile_InvalidYAML(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "parse catalog file")
 }
+
+func TestCurrentProviderModelsResolveWithoutChangingPins(t *testing.T) {
+	for _, id := range []string{"gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "claude-fable-5-1", "claude-opus-5", "claude-sonnet-5"} {
+		rc, err := DefaultResolver().Resolve(ResolutionInput{AgentDefModel: id, CanOperate: true})
+		require.NoError(t, err, id)
+		assert.Equal(t, id, rc.Model)
+		assert.Equal(t, "2026-09-08", rc.Entry.Metadata["verified_at"])
+		assert.Equal(t, 128000, rc.Entry.MaxOutputTokens)
+		assert.GreaterOrEqual(t, rc.Entry.ContextWindow, 1000000)
+	}
+	for _, id := range []string{"api-claude-fable-5-1", "api-claude-opus-5", "api-claude-sonnet-5"} {
+		rc, err := DefaultResolver().Resolve(ResolutionInput{AgentDefModel: id})
+		require.NoError(t, err)
+		assert.Equal(t, "anthropic", rc.Provider)
+		_, err = DefaultResolver().Resolve(ResolutionInput{AgentDefModel: id, CanOperate: true})
+		assert.Error(t, err, "API model must not gain CLI operate capability")
+	}
+	rc, err := DefaultResolver().Resolve(ResolutionInput{AgentDefModel: "gpt-5.5"})
+	require.NoError(t, err)
+	assert.Equal(t, "gpt-5.5", rc.Model)
+	fable, _ := DefaultCatalog().Lookup("claude-fable-5-1")
+	assert.Equal(t, 0.25, fable.Pricing.CacheReadPerMillion)
+	haiku, _ := DefaultCatalog().Lookup("claude-haiku-4-5-20251001")
+	assert.Equal(t, 5.0, haiku.Pricing.OutputPerMillion)
+}
